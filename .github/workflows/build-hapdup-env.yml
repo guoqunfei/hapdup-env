@@ -51,22 +51,36 @@ jobs:
           cd /tmp/hapdup/submodules/Flye
           python setup.py install
 
-      - name: Build Margin with patched htslib
+      - name: Build Margin with wrapper-fixed htslib
         shell: bash -l {0}
         run: |
           HTSLIB_DIR="/tmp/hapdup/submodules/margin/externalTools/htslib"
           cd "$HTSLIB_DIR"
           
-          # 1. 重新生成 configure（获取最新 config.guess/config.sub）
+          # 1. 重新生成 configure
           autoreconf -fi
           
-          # 2. 关键修复：configure 脚本会把 unknown-Linux 传给 config.sub，直接改掉
-          sed -i 's/unknown-Linux/linux-gnu/g' configure
+          # 2. 关键修复：创建 config.guess wrapper，永远返回合法值
+          mv config.guess config.guess.orig
+          cat > config.guess << 'EOF'
+#!/bin/bash
+echo "x86_64-pc-linux-gnu"
+EOF
+          chmod +x config.guess
           
-          # 3. 同时给 config.sub 打补丁，确保接受 unknown-Linux（双重保险）
-          sed -i 's/^\(\s*\)\*-\*-\*)/\1*-unknown-linux-gnu | \1*-\*-\*)/' config.sub || true
+          # 3. 关键修复：创建 config.sub wrapper，拦截非法参数
+          mv config.sub config.sub.orig
+          cat > config.sub << 'EOF'
+#!/bin/bash
+if [ "$1" = "unknown-Linux" ] || [ "$1" = "unknown-linux" ] || [ "$1" = "unknown-unknown-Linux" ]; then
+  echo "x86_64-pc-linux-gnu"
+  exit 0
+fi
+exec ./config.sub.orig "$@"
+EOF
+          chmod +x config.sub
           
-          # 4. 运行 configure（设置 SHLIB_EXT 绕过共享库类型检测）
+          # 4. 运行 configure（设置 SHLIB_EXT 绕过共享库检测）
           SHLIB_EXT=".so" ./configure --disable-libcurl --disable-s3 --disable-gcs
           
           # 5. 编译 Margin
