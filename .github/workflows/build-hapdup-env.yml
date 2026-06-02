@@ -60,27 +60,17 @@ jobs:
           # 1. 重新生成 configure
           autoreconf -fi
           
-          # 2. 关键修复：创建 config.guess wrapper，永远返回合法值
+          # 2. 创建 config.guess wrapper，永远返回合法值
           mv config.guess config.guess.orig
-          cat > config.guess << 'EOF'
-#!/bin/bash
-echo "x86_64-pc-linux-gnu"
-EOF
+          printf '%s\n' '#!/bin/bash' 'echo "x86_64-pc-linux-gnu"' > config.guess
           chmod +x config.guess
           
-          # 3. 关键修复：创建 config.sub wrapper，拦截非法参数
+          # 3. 创建 config.sub wrapper，拦截非法参数
           mv config.sub config.sub.orig
-          cat > config.sub << 'EOF'
-#!/bin/bash
-if [ "$1" = "unknown-Linux" ] || [ "$1" = "unknown-linux" ] || [ "$1" = "unknown-unknown-Linux" ]; then
-  echo "x86_64-pc-linux-gnu"
-  exit 0
-fi
-exec ./config.sub.orig "$@"
-EOF
+          printf '%s\n' '#!/bin/bash' 'if [ "$1" = "unknown-Linux" ] || [ "$1" = "unknown-linux" ] || [ "$1" = "unknown-unknown-Linux" ]; then' '  echo "x86_64-pc-linux-gnu"' '  exit 0' 'fi' 'exec ./config.sub.orig "$@"' > config.sub
           chmod +x config.sub
           
-          # 4. 运行 configure（设置 SHLIB_EXT 绕过共享库检测）
+          # 4. 运行 configure
           SHLIB_EXT=".so" ./configure --disable-libcurl --disable-s3 --disable-gcs
           
           # 5. 编译 Margin
