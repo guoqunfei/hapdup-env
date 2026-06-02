@@ -21,7 +21,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y autoconf automake libtool cmake samtools bwa minimap2 git pip libhdf5-dev libbz2-dev liblzma-dev
-          conda install htslib setuptools -c conda-forge -c bioconda -y
+          conda install htslib setuptools pip -c conda-forge -c bioconda -y
 
       - name: Clone HapDup with submodules
         shell: bash -l {0}
