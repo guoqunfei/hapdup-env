@@ -21,7 +21,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y autoconf automake libtool cmake samtools bwa minimap2 git pip libhdf5-dev libbz2-dev liblzma-dev
-          conda install htslib setuptools pip -c conda-forge -c bioconda -y
+          conda install htslib setuptools pip numpy=1.21 -c conda-forge -c bioconda -y
 
       - name: Clone HapDup with submodules
         shell: bash -l {0}
@@ -51,58 +51,67 @@ jobs:
           cd /tmp/hapdup/submodules/Flye
           python setup.py install
 
-      - name: Build Margin with fully fixed htslib
+      - name: Build Margin with patched htslib
         shell: bash -l {0}
         run: |
           HTSLIB_DIR="/tmp/hapdup/submodules/margin/externalTools/htslib"
           cd "$HTSLIB_DIR"
-          
-          # 1. 重新生成 configure
           autoreconf -fi
-          
-          # 2. 创建 config.guess wrapper
           mv config.guess config.guess.orig
           printf '%s\n' '#!/bin/bash' 'echo "x86_64-pc-linux-gnu"' > config.guess
           chmod +x config.guess
-          
-          # 3. 创建 config.sub wrapper
           mv config.sub config.sub.orig
-          printf '%s\n' '#!/bin/bash' 'if [ "$1" = "unknown-Linux" ] || [ "$1" = "unknown-linux" ] || [ "$1" = "unknown-unknown-Linux" ]; then' '  echo "x86_64-pc-linux-gnu"' '  exit 0' 'fi' 'exec ./config.sub.orig "$@"' > config.sub
+          printf '%s\n' '#!/bin/bash' 'if [ "$1" = "unknown-Linux" ] || [ "$1" = "unknown-linux" ]; then' '  echo "x86_64-pc-linux-gnu"' '  exit 0' 'fi' 'exec ./config.sub.orig "$@"' > config.sub
           chmod +x config.sub
-          
-          # 4. 运行 configure
           SHLIB_EXT=".so" ./configure --disable-libcurl --disable-s3 --disable-gcs --disable-bz2 --disable-lzma
-          
-          # 5. 手动生成 version.h
           if [ ! -f version.h ]; then
-            HTS_VERSION=$(sed -n 's/^m4_define(\[hts_version_release\], \[\([0-9.]*\)\])/\1/p' configure.ac 2>/dev/null || echo "1.9")
-            printf '%s\n' "#ifndef HTS_VERSION" "#define HTS_VERSION \"$HTS_VERSION\"" "#endif" > version.h
-            echo "Generated version.h with version $HTS_VERSION"
+            printf '%s\n' "#ifndef HTS_VERSION" "#define HTS_VERSION \"1.9\"" "#endif" > version.h
           fi
-          
-          # 6. 编译 Margin
           cd /tmp/hapdup/submodules/margin
           mkdir -p build && cd build
           cmake ..
           make -j4
           cp ./margin $CONDA_PREFIX/bin/
 
-      - name: Install PEPPER
+      - name: Pre-patch PEPPER htslib and install
         shell: bash -l {0}
         run: |
           cd /tmp/hapdup/submodules/pepper
-          # 修复 python_requires 格式错误
-          sed -i "s/python_requires='>=3\\.5\\.\\*'/python_requires='>=3.5'/g" setup.py
-          python -m pip install .
+          
+          # 1. 放宽 numpy 版本（1.16.6 太老，与新版 setuptools 不兼容）
+          sed -i "s/numpy==1.16.6/numpy>=1.19/g" setup.py
+          
+          # 2. 预先下载并修复 htslib，让 PEPPER 的 CMake 跳过下载步骤
+          HTSLIB_BUILD_DIR="build/temp.linux-x86_64-cpython-38/htslib/src"
+          mkdir -p "$HTSLIB_BUILD_DIR"
+          cd "$HTSLIB_BUILD_DIR"
+          
+          # 下载 htslib-1.9（PEPPER 用的版本）
+          wget -q https://github.com/samtools/htslib/releases/download/1.9/htslib-1.9.tar.bz2
+          tar xjf htslib-1.9.tar.bz2
+          mv htslib-1.9 htslib
+          cd htslib
+          
+          # 修复 autotools
+          autoreconf -fi
+          mv config.guess config.guess.orig
+          printf '%s\n' '#!/bin/bash' 'echo "x86_64-pc-linux-gnu"' > config.guess
+          chmod +x config.guess
+          mv config.sub config.sub.orig
+          printf '%s\n' '#!/bin/bash' 'if [ "$1" = "unknown-Linux" ] || [ "$1" = "unknown-linux" ]; then' '  echo "x86_64-pc-linux-gnu"' '  exit 0' 'fi' 'exec ./config.sub.orig "$@"' > config.sub
+          chmod +x config.sub
+          
+          # 生成 version.h
+          printf '%s\n' "#ifndef HTS_VERSION" "#define HTS_VERSION \"1.9\"" "#endif" > version.h
+          
+          # 3. 安装 PEPPER
+          cd /tmp/hapdup/submodules/pepper
+          python -m pip install --no-build-isolation .
 
       - name: Install HapDup
         shell: bash -l {0}
         run: |
           cd /tmp/hapdup
-          # 同样修复 HapDup 的 python_requires（如果有）
-          if [ -f setup.py ]; then
-            sed -i "s/python_requires='>=3\\.5\\.\\*'/python_requires='>=3.5'/g" setup.py
-          fi
           python -m pip install .
 
       - name: Install conda-pack and pack environment
