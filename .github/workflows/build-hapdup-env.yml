@@ -1,0 +1,69 @@
+name: Build HapDup Conda Environment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: 3.8
+          activate-environment: hapdup_env
+          channels: conda-forge,bioconda,defaults
+          channel-priority: strict
+
+      - name: Install system dependencies
+        shell: bash -l {0}
+        run: |
+          conda install cmake samtools bwa minimap2 git pip -y
+
+      - name: Clone HapDup with submodules
+        shell: bash -l {0}
+        run: |
+          cd /tmp
+          git clone --recursive https://github.com/fenderglass/hapdup.git
+          cd hapdup
+          git submodule update --init --recursive
+
+      - name: Build and install Flye
+        shell: bash -l {0}
+        run: |
+          cd /tmp/hapdup/submodules/Flye
+          python setup.py install
+
+      - name: Build and install Margin
+        shell: bash -l {0}
+        run: |
+          cd /tmp/hapdup/submodules/margin
+          mkdir -p build && cd build
+          cmake .. && make -j4
+          cp ./margin $CONDA_PREFIX/bin/
+
+      - name: Install PEPPER
+        shell: bash -l {0}
+        run: |
+          cd /tmp/hapdup/submodules/pepper
+          python -m pip install .
+
+      - name: Install HapDup
+        shell: bash -l {0}
+        run: |
+          cd /tmp/hapdup
+          python -m pip install .
+
+      - name: Install conda-pack and pack environment
+        shell: bash -l {0}
+        run: |
+          conda install -c conda-forge conda-pack -y
+          conda pack -n hapdup_env -o hapdup_env.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hapdup-conda-env
+          path: hapdup_env.tar.gz
+          retention-days: 30
