@@ -29,6 +29,22 @@ jobs:
           cd hapdup
           git submodule update --init --recursive
 
+      - name: Patch Flye for GCC 13 compatibility
+        shell: bash -l {0}
+        run: |
+          # GCC 13+ 要求显式包含 <cstdint>，Flye 老代码缺少这个
+          HEADER="/tmp/hapdup/submodules/Flye/src/sequence/sequence_container.h"
+          if ! grep -q "#include <cstdint>" "$HEADER"; then
+            sed -i '1i#include <cstdint>' "$HEADER"
+            echo "Patched $HEADER"
+          fi
+          # 顺便检查另一个可能出问题的文件
+          HEADER2="/tmp/hapdup/submodules/Flye/src/repeat_graph/repeat_graph.h"
+          if [ -f "$HEADER2" ] && ! grep -q "#include <cstdint>" "$HEADER2"; then
+            sed -i '1i#include <cstdint>' "$HEADER2"
+            echo "Patched $HEADER2"
+          fi
+
       - name: Build and install Flye
         shell: bash -l {0}
         run: |
