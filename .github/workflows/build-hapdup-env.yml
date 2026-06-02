@@ -91,12 +91,18 @@ jobs:
         shell: bash -l {0}
         run: |
           cd /tmp/hapdup/submodules/pepper
+          # 修复 python_requires 格式错误
+          sed -i "s/python_requires='>=3\\.5\\.\\*'/python_requires='>=3.5'/g" setup.py
           python -m pip install .
 
       - name: Install HapDup
         shell: bash -l {0}
         run: |
           cd /tmp/hapdup
+          # 同样修复 HapDup 的 python_requires（如果有）
+          if [ -f setup.py ]; then
+            sed -i "s/python_requires='>=3\\.5\\.\\*'/python_requires='>=3.5'/g" setup.py
+          fi
           python -m pip install .
 
       - name: Install conda-pack and pack environment
