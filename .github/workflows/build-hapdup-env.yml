@@ -21,7 +21,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y automake libtool cmake samtools bwa minimap2 git pip
-          conda install htslib -c bioconda -y
+          conda install htslib setuptools -c conda-forge -c bioconda -y
 
       - name: Clone HapDup with submodules
         shell: bash -l {0}
@@ -47,37 +47,31 @@ jobs:
       - name: Build and install Flye
         shell: bash -l {0}
         run: |
+          # 关键修复：确保 setuptools 已安装
+          pip install setuptools wheel
           cd /tmp/hapdup/submodules/Flye
           python setup.py install
 
       - name: Fix Margin htslib autotools and build
         shell: bash -l {0}
         run: |
-          # 1. 给 Margin 内嵌的 htslib 补充 config.guess 和 config.sub
           HTSLIB_DIR="/tmp/hapdup/submodules/margin/externalTools/htslib"
           if [ -d "$HTSLIB_DIR" ]; then
             cp /usr/share/automake-*/config.guess "$HTSLIB_DIR/" 2>/dev/null || \
               cp /usr/share/misc/config.guess "$HTSLIB_DIR/" 2>/dev/null || \
               wget -O "$HTSLIB_DIR/config.guess" 'https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD'
-            
             cp /usr/share/automake-*/config.sub "$HTSLIB_DIR/" 2>/dev/null || \
               cp /usr/share/misc/config.sub "$HTSLIB_DIR/" 2>/dev/null || \
               wget -O "$HTSLIB_DIR/config.sub" 'https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD'
-            
             echo "Fixed htslib autotools files"
-            ls -la "$HTSLIB_DIR"/config.*
           fi
 
-          # 2. 编译 Margin
           cd /tmp/hapdup/submodules/margin
           mkdir -p build && cd build
-          
-          # 指定使用 conda 的 htslib，避免编译内嵌版
           cmake .. \
             -DCMAKE_PREFIX_PATH="$CONDA_PREFIX" \
             -DHTSLIB_DIR="$CONDA_PREFIX/lib" \
             -DHTSLIB_INCLUDE="$CONDA_PREFIX/include" || cmake ..
-          
           make -j4
           cp ./margin $CONDA_PREFIX/bin/
 
