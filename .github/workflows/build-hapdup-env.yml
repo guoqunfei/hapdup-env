@@ -51,7 +51,7 @@ jobs:
           cd /tmp/hapdup/submodules/Flye
           python setup.py install
 
-      - name: Build Margin with wrapper-fixed htslib
+      - name: Build Margin with fully fixed htslib
         shell: bash -l {0}
         run: |
           HTSLIB_DIR="/tmp/hapdup/submodules/margin/externalTools/htslib"
@@ -60,20 +60,27 @@ jobs:
           # 1. 重新生成 configure
           autoreconf -fi
           
-          # 2. 创建 config.guess wrapper，永远返回合法值
+          # 2. 创建 config.guess wrapper
           mv config.guess config.guess.orig
           printf '%s\n' '#!/bin/bash' 'echo "x86_64-pc-linux-gnu"' > config.guess
           chmod +x config.guess
           
-          # 3. 创建 config.sub wrapper，拦截非法参数
+          # 3. 创建 config.sub wrapper
           mv config.sub config.sub.orig
           printf '%s\n' '#!/bin/bash' 'if [ "$1" = "unknown-Linux" ] || [ "$1" = "unknown-linux" ] || [ "$1" = "unknown-unknown-Linux" ]; then' '  echo "x86_64-pc-linux-gnu"' '  exit 0' 'fi' 'exec ./config.sub.orig "$@"' > config.sub
           chmod +x config.sub
           
-          # 4. 运行 configure（禁用 bz2 和 lzma，避免依赖问题）
+          # 4. 运行 configure
           SHLIB_EXT=".so" ./configure --disable-libcurl --disable-s3 --disable-gcs --disable-bz2 --disable-lzma
           
-          # 5. 编译 Margin
+          # 5. 关键修复：手动生成 version.h（configure 有时不生成这个文件）
+          if [ ! -f version.h ]; then
+            HTS_VERSION=$(sed -n 's/^m4_define(\[hts_version_release\], \[\([0-9.]*\)\])/\1/p' configure.ac 2>/dev/null || echo "1.9")
+            printf '%s\n' "#ifndef HTS_VERSION" "#define HTS_VERSION \"$HTS_VERSION\"" "#endif" > version.h
+            echo "Generated version.h with version $HTS_VERSION"
+          fi
+          
+          # 6. 编译 Margin
           cd /tmp/hapdup/submodules/margin
           mkdir -p build && cd build
           cmake ..
