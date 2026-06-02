@@ -20,7 +20,7 @@ jobs:
         shell: bash -l {0}
         run: |
           sudo apt-get update
-          sudo apt-get install -y autoconf automake libtool cmake samtools bwa minimap2 git pip libhdf5-dev
+          sudo apt-get install -y autoconf automake libtool cmake samtools bwa minimap2 git pip libhdf5-dev libbz2-dev
           conda install htslib setuptools -c conda-forge -c bioconda -y
 
       - name: Clone HapDup with submodules
@@ -70,8 +70,8 @@ jobs:
           printf '%s\n' '#!/bin/bash' 'if [ "$1" = "unknown-Linux" ] || [ "$1" = "unknown-linux" ] || [ "$1" = "unknown-unknown-Linux" ]; then' '  echo "x86_64-pc-linux-gnu"' '  exit 0' 'fi' 'exec ./config.sub.orig "$@"' > config.sub
           chmod +x config.sub
           
-          # 4. 运行 configure
-          SHLIB_EXT=".so" ./configure --disable-libcurl --disable-s3 --disable-gcs
+          # 4. 运行 configure（禁用 bz2 和 lzma，避免依赖问题）
+          SHLIB_EXT=".so" ./configure --disable-libcurl --disable-s3 --disable-gcs --disable-bz2 --disable-lzma
           
           # 5. 编译 Margin
           cd /tmp/hapdup/submodules/margin
