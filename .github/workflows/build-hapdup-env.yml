@@ -20,7 +20,7 @@ jobs:
         shell: bash -l {0}
         run: |
           sudo apt-get update
-          sudo apt-get install -y autoconf automake libtool cmake samtools bwa minimap2 git pip libhdf5-dev libbz2-dev
+          sudo apt-get install -y autoconf automake libtool cmake samtools bwa minimap2 git pip libhdf5-dev libbz2-dev liblzma-dev
           conda install htslib setuptools -c conda-forge -c bioconda -y
 
       - name: Clone HapDup with submodules
@@ -73,7 +73,7 @@ jobs:
           # 4. 运行 configure
           SHLIB_EXT=".so" ./configure --disable-libcurl --disable-s3 --disable-gcs --disable-bz2 --disable-lzma
           
-          # 5. 关键修复：手动生成 version.h（configure 有时不生成这个文件）
+          # 5. 手动生成 version.h
           if [ ! -f version.h ]; then
             HTS_VERSION=$(sed -n 's/^m4_define(\[hts_version_release\], \[\([0-9.]*\)\])/\1/p' configure.ac 2>/dev/null || echo "1.9")
             printf '%s\n' "#ifndef HTS_VERSION" "#define HTS_VERSION \"$HTS_VERSION\"" "#endif" > version.h
