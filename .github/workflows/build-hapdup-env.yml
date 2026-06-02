@@ -20,7 +20,7 @@ jobs:
         shell: bash -l {0}
         run: |
           sudo apt-get update
-          sudo apt-get install -y automake libtool cmake samtools bwa minimap2 git pip
+          sudo apt-get install -y autoconf automake libtool cmake samtools bwa minimap2 git pip libhdf5-dev
           conda install htslib setuptools -c conda-forge -c bioconda -y
 
       - name: Clone HapDup with submodules
@@ -47,31 +47,24 @@ jobs:
       - name: Build and install Flye
         shell: bash -l {0}
         run: |
-          # 关键修复：确保 setuptools 已安装
           pip install setuptools wheel
           cd /tmp/hapdup/submodules/Flye
           python setup.py install
 
-      - name: Fix Margin htslib autotools and build
+      - name: Build Margin with autoreconf-fixed htslib
         shell: bash -l {0}
         run: |
-          HTSLIB_DIR="/tmp/hapdup/submodules/margin/externalTools/htslib"
-          if [ -d "$HTSLIB_DIR" ]; then
-            cp /usr/share/automake-*/config.guess "$HTSLIB_DIR/" 2>/dev/null || \
-              cp /usr/share/misc/config.guess "$HTSLIB_DIR/" 2>/dev/null || \
-              wget -O "$HTSLIB_DIR/config.guess" 'https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD'
-            cp /usr/share/automake-*/config.sub "$HTSLIB_DIR/" 2>/dev/null || \
-              cp /usr/share/misc/config.sub "$HTSLIB_DIR/" 2>/dev/null || \
-              wget -O "$HTSLIB_DIR/config.sub" 'https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD'
-            echo "Fixed htslib autotools files"
-          fi
-
+          # 1. 进入 Margin 内嵌 htslib，用 autoreconf 重新生成 configure（获取最新 config.guess/config.sub）
+          cd /tmp/hapdup/submodules/margin/externalTools/htslib
+          autoreconf -fi
+          
+          # 2. 手动运行 configure 生成 config.h（禁用有问题的网络功能，让 CMake 直接跳过这步）
+          ./configure --disable-libcurl --disable-s3 --disable-gcs
+          
+          # 3. 编译 Margin
           cd /tmp/hapdup/submodules/margin
           mkdir -p build && cd build
-          cmake .. \
-            -DCMAKE_PREFIX_PATH="$CONDA_PREFIX" \
-            -DHTSLIB_DIR="$CONDA_PREFIX/lib" \
-            -DHTSLIB_INCLUDE="$CONDA_PREFIX/include" || cmake ..
+          cmake ..
           make -j4
           cp ./margin $CONDA_PREFIX/bin/
 
