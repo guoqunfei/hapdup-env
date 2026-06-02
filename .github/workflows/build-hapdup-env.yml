@@ -29,21 +29,21 @@ jobs:
           cd hapdup
           git submodule update --init --recursive
 
-      - name: Patch Flye for GCC 13 compatibility
+      - name: Patch Flye for GCC 13 compatibility (comprehensive)
         shell: bash -l {0}
         run: |
-          # GCC 13+ 要求显式包含 <cstdint>，Flye 老代码缺少这个
-          HEADER="/tmp/hapdup/submodules/Flye/src/sequence/sequence_container.h"
-          if ! grep -q "#include <cstdint>" "$HEADER"; then
-            sed -i '1i#include <cstdint>' "$HEADER"
-            echo "Patched $HEADER"
-          fi
-          # 顺便检查另一个可能出问题的文件
-          HEADER2="/tmp/hapdup/submodules/Flye/src/repeat_graph/repeat_graph.h"
-          if [ -f "$HEADER2" ] && ! grep -q "#include <cstdint>" "$HEADER2"; then
-            sed -i '1i#include <cstdint>' "$HEADER2"
-            echo "Patched $HEADER2"
-          fi
+          # GCC 13+ 要求显式包含 <cstdint>
+          # 自动给 Flye src 下所有使用 uint32_t/uint64_t 但缺少 cstdint 的头文件/源文件打补丁
+          FLYE_SRC="/tmp/hapdup/submodules/Flye/src"
+          for f in $(find "$FLYE_SRC" -type f \( -name "*.h" -o -name "*.cpp" \)); do
+            if ! grep -q "#include <cstdint>" "$f"; then
+              if grep -qE "uint32_t|uint64_t|int32_t|int64_t|uint16_t|int16_t|uint8_t|int8_t" "$f"; then
+                sed -i '1i#include <cstdint>' "$f"
+                echo "Patched: $f"
+              fi
+            fi
+          done
+          echo "Patching complete"
 
       - name: Build and install Flye
         shell: bash -l {0}
@@ -83,3 +83,4 @@ jobs:
           name: hapdup-conda-env
           path: hapdup_env.tar.gz
           retention-days: 30
+          compression-level: 0
